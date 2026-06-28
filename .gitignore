@@ -1,0 +1,9 @@
+# Copias incompletas fuera de la app real.
+/public/
+/views/
+/{views/
+/proyecto/{views/
+
+# Archivos temporales comunes.
+.DS_Store
+Thumbs.db
