@@ -1,9 +1,8 @@
-# Copias incompletas fuera de la app real.
-/public/
-/views/
-/{views/
-/proyecto/{views/
+# Carpetas accidentales creadas con llaves en el nombre.
+[{]views/
+proyecto/[{]views/
 
-# Archivos temporales comunes.
+# Cache local de OMDb y temporales comunes.
+cache/
 .DS_Store
 Thumbs.db
