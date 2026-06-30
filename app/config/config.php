@@ -11,3 +11,8 @@ define('DB_CHARSET', 'utf8mb4');
 
 define('APP_SESSION_MINUTOS', 30);
 define('APP_DEBUG', (getenv('APP_DEBUG') ?: '0') === '1');
+
+// ─── OMDb API ────────────────────────────────────────────────────────────────
+// Obtén tu API key gratuita en: https://www.omdbapi.com/apikey.aspx
+// Puedes sobreescribirla con la variable de entorno OMDB_API_KEY
+define('OMDB_API_KEY', getenv('OMDB_API_KEY') ?: 'TU_API_KEY_AQUI');

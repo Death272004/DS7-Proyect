@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/core/Seguridad.php';
+require_once __DIR__ . '/core/OmdbApi.php';
 require_once __DIR__ . '/modelos/UsuarioModelo.php';
 require_once __DIR__ . '/modelos/ContenidoModelo.php';
 

@@ -1,3 +1,3 @@
 <?php
-header('Location: proyecto/index.php');
+header('Location: views/inicio/inicio.php');
 exit;
