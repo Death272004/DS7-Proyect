@@ -1,178 +1,244 @@
 <?php
-/**
- * views/catalog/catalogo.php
- * Catálogo de películas y series con integración OMDb API.
- */
-
-require_once __DIR__ . '/../../app/bootstrap.php';
-
-$contenidoModelo    = new ContenidoModelo();
-$omdb               = new OmdbApi();
-$terminoBusqueda    = Seguridad::limpiarTexto($_GET['buscar'] ?? '', 100);
-$tipoSolicitado     = Seguridad::limpiarTexto($_GET['tipo'] ?? 'todos', 20);
-$filtroTipoActivo   = in_array($tipoSolicitado, ['todos', 'pelicula', 'serie'], true) ? $tipoSolicitado : 'todos';
-$filtroGeneroActivo = Seguridad::entero($_GET['genero'] ?? 0, 0);
-
-try {
-    $generosDisponibles = $contenidoModelo->obtenerGeneros();
-    $contenidos         = $contenidoModelo->listarCatalogo($terminoBusqueda, $filtroTipoActivo, $filtroGeneroActivo);
-    // Enriquecer con pósters y datos de OMDb
-    $contenidos         = $omdb->enriquecerContenidos($contenidos);
-} catch (Throwable $e) {
-    error_log('Error catalogo: ' . $e->getMessage());
-}
-
-$tituloPagina = 'Catálogo';
-$paginaActiva  = 'catalogo';
 include __DIR__ . '/../partials/header.php';
 
-// Defaults seguros
 $terminoBusquedaRaw = $terminoBusqueda ?? '';
-$terminoBusqueda    = htmlspecialchars($terminoBusquedaRaw, ENT_QUOTES, 'UTF-8');
-$filtroTipoActivo   = in_array($filtroTipoActivo ?? 'todos', ['todos','pelicula','serie']) ? ($filtroTipoActivo ?? 'todos') : 'todos';
+$terminoBusqueda = htmlspecialchars($terminoBusquedaRaw, ENT_QUOTES, 'UTF-8');
+$filtroTipoActivo = in_array($filtroTipoActivo ?? 'todos', ['todos', 'pelicula', 'serie'], true) ? ($filtroTipoActivo ?? 'todos') : 'todos';
 $filtroGeneroActivo = (int)($filtroGeneroActivo ?? 0);
 
-$generosDisponibles = $generosDisponibles ?? [
-    ['id'=>1,'nombre'=>'Acción','emoji'=>'💥'],   ['id'=>2,'nombre'=>'Comedia','emoji'=>'😂'],
-    ['id'=>3,'nombre'=>'Drama','emoji'=>'🎭'],    ['id'=>4,'nombre'=>'Terror','emoji'=>'👻'],
-    ['id'=>5,'nombre'=>'Sci-Fi','emoji'=>'🚀'],   ['id'=>6,'nombre'=>'Romance','emoji'=>'💕'],
-    ['id'=>7,'nombre'=>'Thriller','emoji'=>'🔪'], ['id'=>8,'nombre'=>'Animación','emoji'=>'🎨'],
-    ['id'=>9,'nombre'=>'Documental','emoji'=>'🎥'],['id'=>10,'nombre'=>'Fantasía','emoji'=>'🧙'],
-];
+$generosDisponibles = $generosDisponibles ?? [];
+$contenidos = $contenidos ?? [];
+$recomendados = $recomendados ?? [];
+$ultimasVistas = $ultimasVistas ?? [];
+$mostrarTodo = !empty($mostrarTodo);
+$primerNombre = htmlspecialchars(explode(' ', trim($nombreUsuario ?: 'Usuario'))[0] ?: 'Usuario', ENT_QUOTES, 'UTF-8');
 
-$contenidos = $contenidos ?? [
-    ['id'=>1,'titulo'=>'Interstellar','tipo'=>'pelicula','anio'=>2014,'calificacion'=>8.7,'imagen_url'=>'','generos'=>'Sci-Fi,Drama'],
-    ['id'=>2,'titulo'=>'Breaking Bad','tipo'=>'serie','anio'=>2008,'calificacion'=>9.5,'imagen_url'=>'','generos'=>'Drama,Thriller'],
-];
+$heroes = array_slice(!empty($recomendados) ? $recomendados : $contenidos, 0, 5);
+$recomendacionesVista = !empty($recomendados) ? $recomendados : array_slice($contenidos, 0, 5);
+if (count($recomendacionesVista) < 5) {
+    $idsActuales = array_map(static fn ($item): int => (int)$item['id'], $recomendacionesVista);
+    foreach ($contenidos as $item) {
+        if (count($recomendacionesVista) >= 5) {
+            break;
+        }
+        if (!in_array((int)$item['id'], $idsActuales, true)) {
+            $recomendacionesVista[] = $item;
+            $idsActuales[] = (int)$item['id'];
+        }
+    }
+}
+$filaAfinidad = array_slice($contenidos, 0, 5);
+if (!empty($recomendacionesVista)) {
+    $idsRecomendados = array_map(static fn ($item): int => (int)$item['id'], $recomendacionesVista);
+    $filaAfinidad = array_values(array_filter($contenidos, static fn ($item): bool => !in_array((int)$item['id'], $idsRecomendados, true)));
+    $filaAfinidad = array_slice($filaAfinidad, 0, 5);
+}
+
+$generoActivoNombre = '';
+foreach ($generosDisponibles as $genero) {
+    if ((int)$genero['id'] === $filtroGeneroActivo) {
+        $generoActivoNombre = (string)$genero['nombre'];
+        break;
+    }
+}
+if ($generoActivoNombre === '' && !empty($recomendacionesVista[0]['generos'])) {
+    $generoActivoNombre = trim(explode(',', (string)$recomendacionesVista[0]['generos'])[0]);
+}
+$generoActivoNombre = $generoActivoNombre !== '' ? $generoActivoNombre : 'tus gustos';
+
+$renderCard = static function (array $item) use ($url): void {
+    $itemId = (int)$item['id'];
+    $itemTitulo = htmlspecialchars($item['titulo'] ?? '', ENT_QUOTES, 'UTF-8');
+    $itemTipo = ($item['tipo'] ?? '') === 'serie' ? 'Serie' : 'Película';
+    $itemImagen = htmlspecialchars($item['imagen_url'] ?? '', ENT_QUOTES, 'UTF-8');
+    $itemGeneros = htmlspecialchars($item['generos'] ?? '', ENT_QUOTES, 'UTF-8');
+    $coincidencia = (int)($item['coincidencia'] ?? 65);
+    ?>
+    <article class="catalogo-card" data-generos="<?= $itemGeneros ?>" aria-label="<?= $itemTitulo ?>">
+        <a class="catalogo-card__poster" href="<?= htmlspecialchars($url('detalle', ['id' => $itemId]), ENT_QUOTES, 'UTF-8') ?>">
+            <?php if ($itemImagen !== ''): ?>
+                <img src="<?= $itemImagen ?>" alt="Portada de <?= $itemTitulo ?>" loading="lazy">
+            <?php else: ?>
+                <span class="catalogo-card__placeholder"><?= app_icon('film', 'icono--grande') ?></span>
+            <?php endif; ?>
+        </a>
+        <button type="button"
+                class="catalogo-card__guardar js-guardar-contenido"
+                data-id="<?= $itemId ?>"
+                data-titulo="<?= $itemTitulo ?>"
+                aria-label="Guardar <?= $itemTitulo ?>">
+            <?= app_icon('bookmark') ?>
+        </button>
+        <div class="catalogo-card__info">
+            <h3><a href="<?= htmlspecialchars($url('detalle', ['id' => $itemId]), ENT_QUOTES, 'UTF-8') ?>"><?= $itemTitulo ?></a></h3>
+            <span class="catalogo-card__genero"><?= htmlspecialchars(trim(explode(',', (string)($item['generos'] ?? $itemTipo))[0]), ENT_QUOTES, 'UTF-8') ?></span>
+            <p><?= $coincidencia ?>% de coincidencia</p>
+        </div>
+    </article>
+    <?php
+};
 ?>
 
-<main class="pagina-contenido contenedor">
+<main class="catalogo-experiencia">
+    <section class="catalogo-shell contenedor">
+        <div class="catalogo-hero-top">
+            <div>
+                <p class="catalogo-eyebrow">Tus recomendaciones</p>
+                <h1>Hola, <?= $primerNombre ?></h1>
+                <p>Contenido seleccionado segun tus gustos, preferencias e historial reciente.</p>
+            </div>
 
-    <h1 class="seccion-titulo">🎬 Catálogo</h1>
-
-    <!-- Buscador -->
-    <form method="GET" action="catalogo.php" role="search" class="barra-busqueda">
-        <input type="search"
-               id="busqueda-catalogo"
-               name="buscar"
-               class="campo-input"
-               value="<?= $terminoBusqueda ?>"
-               placeholder="Busca por título..."
-               maxlength="100"
-               autocomplete="off"
-               aria-label="Buscar por título">
-        <?php if ($filtroGeneroActivo > 0): ?>
-            <input type="hidden" name="genero" value="<?= $filtroGeneroActivo ?>">
-        <?php endif; ?>
-
-        <select name="tipo" class="campo-select" style="width:auto; min-width:130px;" aria-label="Tipo">
-            <option value="todos"    <?= $filtroTipoActivo === 'todos'    ? 'selected' : '' ?>>Todo</option>
-            <option value="pelicula" <?= $filtroTipoActivo === 'pelicula' ? 'selected' : '' ?>>Películas</option>
-            <option value="serie"    <?= $filtroTipoActivo === 'serie'    ? 'selected' : '' ?>>Series</option>
-        </select>
-
-        <button type="submit" class="btn btn--primario">🔍 Buscar</button>
-
-        <?php if (!empty($terminoBusqueda) || $filtroGeneroActivo): ?>
-            <a href="catalogo.php" class="btn btn--secundario">Limpiar</a>
-        <?php endif; ?>
-    </form>
-
-    <!-- Chips de género -->
-    <nav aria-label="Filtrar por género">
-        <div class="filtros-catalogo">
-            <?php
-                $queryBase = [];
-                if ($terminoBusquedaRaw !== '') { $queryBase['buscar'] = $terminoBusquedaRaw; }
-                if ($filtroTipoActivo !== 'todos') { $queryBase['tipo'] = $filtroTipoActivo; }
-                $urlTodos = 'catalogo.php' . (!empty($queryBase) ? '?' . http_build_query($queryBase) : '');
-            ?>
-            <a href="<?= htmlspecialchars($urlTodos, ENT_QUOTES, 'UTF-8') ?>"
-               class="filtro-chip <?= $filtroGeneroActivo === 0 ? 'activo' : '' ?>">Todos</a>
-            <?php foreach ($generosDisponibles as $g): ?>
-                <?php
-                    $queryGenero = $queryBase;
-                    $queryGenero['genero'] = (int)$g['id'];
-                    $urlGenero = 'catalogo.php?' . http_build_query($queryGenero);
-                ?>
-                <a href="<?= htmlspecialchars($urlGenero, ENT_QUOTES, 'UTF-8') ?>"
-                   class="filtro-chip <?= $filtroGeneroActivo === (int)$g['id'] ? 'activo' : '' ?>">
-                    <?= htmlspecialchars(($g['emoji'] ?? '') . ' ' . $g['nombre'], ENT_QUOTES, 'UTF-8') ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
-    </nav>
-
-    <!-- Grid de contenido -->
-    <?php if (empty($contenidos)): ?>
-        <div class="tarjeta texto-centro" style="padding:3rem; margin-top:1rem">
-            <p style="font-size:2.5rem; margin-bottom:0.75rem">🎬</p>
-            <p class="tarjeta__titulo">Sin resultados</p>
-            <p class="tarjeta__subtitulo">No encontramos contenido con esos filtros.</p>
-            <a href="catalogo.php" class="btn btn--primario margen-arriba">Ver todo</a>
-        </div>
-    <?php else: ?>
-        <p class="texto-suave" style="margin-bottom:1rem">
-            Mostrando <?= count($contenidos) ?> resultado<?= count($contenidos) !== 1 ? 's' : '' ?>
-            <?php if (!empty($terminoBusqueda)): ?>
-                para "<strong><?= $terminoBusqueda ?></strong>"
-            <?php endif; ?>
-        </p>
-
-        <div class="grid-peliculas">
-            <?php foreach ($contenidos as $item):
-                $itemId           = (int) $item['id'];
-                $itemTitulo       = htmlspecialchars($item['titulo'],    ENT_QUOTES, 'UTF-8');
-                $itemTipo         = $item['tipo'] === 'serie' ? 'Serie' : 'Película';
-                $itemAnio         = (int) $item['anio'];
-                $itemCalificacion = number_format((float) $item['calificacion'], 1);
-                $itemImagen       = htmlspecialchars($item['imagen_url'] ?? '', ENT_QUOTES, 'UTF-8');
-                $itemGeneros      = htmlspecialchars($item['generos']    ?? '', ENT_QUOTES, 'UTF-8');
-                $itemImdbRating   = $item['imdb_rating'] ?? null;
-            ?>
-            <article class="tarjeta-pelicula omdb-card"
-                     data-generos="<?= $itemGeneros ?>"
-                     aria-label="<?= $itemTitulo ?>">
-                <a href="detalle.php?id=<?= $itemId ?>">
-                    <?php if (!empty($itemImagen)): ?>
-                        <img class="tarjeta-pelicula__imagen omdb-poster"
-                             src="<?= $itemImagen ?>"
-                             alt="Portada de <?= $itemTitulo ?>"
-                             loading="lazy">
-                    <?php else: ?>
-                        <div class="tarjeta-pelicula__imagen"
-                             style="display:flex; align-items:center; justify-content:center; font-size:3rem; color:var(--color-borde);">
-                            🎬
-                        </div>
-                    <?php endif; ?>
-                </a>
-                <span class="tarjeta-pelicula__badge"><?= $itemTipo ?></span>
-                <?php if ($itemImdbRating): ?>
-                    <span class="badge-imdb" title="Calificación IMDb">
-                        IMDb <?= htmlspecialchars($itemImdbRating, ENT_QUOTES, 'UTF-8') ?>
-                    </span>
+            <form method="GET" action="<?= htmlspecialchars(app_base_url() . '/index.php', ENT_QUOTES, 'UTF-8') ?>" role="search" class="catalogo-search">
+                <input type="hidden" name="ruta" value="catalogo">
+                <?php if ($filtroTipoActivo !== 'todos'): ?>
+                    <input type="hidden" name="tipo" value="<?= htmlspecialchars($filtroTipoActivo, ENT_QUOTES, 'UTF-8') ?>">
                 <?php endif; ?>
-                <div class="tarjeta-pelicula__info">
-                    <h2 class="tarjeta-pelicula__titulo">
-                        <a href="detalle.php?id=<?= $itemId ?>"><?= $itemTitulo ?></a>
-                    </h2>
-                    <div class="tarjeta-pelicula__meta">
-                        <span><?= $itemAnio ?></span>
-                        <span class="tarjeta-pelicula__calificacion">⭐ <?= $itemCalificacion ?></span>
-                    </div>
-                    <?php if (!empty($itemGeneros)): ?>
-                    <div class="tarjeta-generos">
-                        <?php foreach (array_slice(explode(',', $itemGeneros), 0, 2) as $g): ?>
-                            <span class="chip-genero"><?= htmlspecialchars(trim($g), ENT_QUOTES, 'UTF-8') ?></span>
-                        <?php endforeach; ?>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </article>
-            <?php endforeach; ?>
+                <?php if ($filtroGeneroActivo > 0): ?>
+                    <input type="hidden" name="genero" value="<?= $filtroGeneroActivo ?>">
+                <?php endif; ?>
+                <?= app_icon('search') ?>
+                <input type="search"
+                       id="busqueda-catalogo"
+                       name="buscar"
+                       value="<?= $terminoBusqueda ?>"
+                       placeholder="Buscar peliculas, series, generos y mas..."
+                       maxlength="100"
+                       autocomplete="off"
+                       aria-label="Buscar por titulo">
+                <button type="submit">Buscar</button>
+            </form>
         </div>
-    <?php endif; ?>
 
+        <nav class="catalogo-chips" aria-label="Filtros del catalogo">
+            <?php
+                $baseSinTipo = [];
+                if ($terminoBusquedaRaw !== '') { $baseSinTipo['buscar'] = $terminoBusquedaRaw; }
+                if ($filtroGeneroActivo > 0) { $baseSinTipo['genero'] = $filtroGeneroActivo; }
+            ?>
+            <a href="<?= htmlspecialchars($url('catalogo', $baseSinTipo), ENT_QUOTES, 'UTF-8') ?>" class="<?= $filtroTipoActivo === 'todos' ? 'activo' : '' ?>">
+                <?= app_icon('sparkles') ?> Todos
+            </a>
+            <a href="<?= htmlspecialchars($url('catalogo', array_merge($baseSinTipo, ['tipo' => 'pelicula'])), ENT_QUOTES, 'UTF-8') ?>" class="<?= $filtroTipoActivo === 'pelicula' ? 'activo' : '' ?>">
+                <?= app_icon('film') ?> Películas
+            </a>
+            <a href="<?= htmlspecialchars($url('catalogo', array_merge($baseSinTipo, ['tipo' => 'serie'])), ENT_QUOTES, 'UTF-8') ?>" class="<?= $filtroTipoActivo === 'serie' ? 'activo' : '' ?>">
+                <?= app_icon('play') ?> Series
+            </a>
+            <?php foreach (array_slice($generosDisponibles, 0, 6) as $g): ?>
+                <?php
+                    $queryGenero = [];
+                    if ($terminoBusquedaRaw !== '') { $queryGenero['buscar'] = $terminoBusquedaRaw; }
+                    if ($filtroTipoActivo !== 'todos') { $queryGenero['tipo'] = $filtroTipoActivo; }
+                    $queryGenero['genero'] = (int)$g['id'];
+                ?>
+                <a href="<?= htmlspecialchars($url('catalogo', $queryGenero), ENT_QUOTES, 'UTF-8') ?>" class="<?= $filtroGeneroActivo === (int)$g['id'] ? 'activo' : '' ?>">
+                    <?= app_genero_icon((string)$g['nombre'], 'chip-genero__icono') ?>
+                    <?= htmlspecialchars($g['nombre'], ENT_QUOTES, 'UTF-8') ?>
+                </a>
+            <?php endforeach; ?>
+        </nav>
+
+        <?php if (!empty($terminoBusquedaRaw) || $filtroTipoActivo !== 'todos' || $filtroGeneroActivo > 0): ?>
+            <div class="catalogo-filtros-activos">
+                <span>Mostrando <?= count($contenidos) ?> resultado<?= count($contenidos) !== 1 ? 's' : '' ?></span>
+                <a href="<?= htmlspecialchars($url('catalogo'), ENT_QUOTES, 'UTF-8') ?>">Limpiar filtros</a>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($heroes)): ?>
+            <div class="catalogo-destacados-rotador" data-intervalo="3000">
+                <?php foreach ($heroes as $indiceHero => $hero): ?>
+                    <?php
+                        $heroId = (int)$hero['id'];
+                        $heroTitulo = htmlspecialchars($hero['titulo'] ?? '', ENT_QUOTES, 'UTF-8');
+                        $heroSinopsis = htmlspecialchars($hero['sinopsis'] ?? 'Una seleccion destacada para tu proxima noche de peliculas y series.', ENT_QUOTES, 'UTF-8');
+                        $heroImagen = htmlspecialchars($hero['imagen_url'] ?? '', ENT_QUOTES, 'UTF-8');
+                        $heroGenero = htmlspecialchars(trim(explode(',', (string)($hero['generos'] ?? 'Recomendacion'))[0]), ENT_QUOTES, 'UTF-8');
+                    ?>
+                    <section class="catalogo-destacado <?= $indiceHero === 0 ? 'activo' : '' ?>" data-hero-index="<?= $indiceHero ?>">
+                        <div class="catalogo-destacado__texto">
+                            <span class="catalogo-destacado__badge"><?= app_icon('star') ?> Recomendación destacada <?= $indiceHero + 1 ?>/<?= count($heroes) ?></span>
+                            <h2><?= $heroTitulo ?></h2>
+                            <p><?= mb_strlen($heroSinopsis) > 160 ? htmlspecialchars(mb_substr(htmlspecialchars_decode($heroSinopsis, ENT_QUOTES), 0, 157) . '...', ENT_QUOTES, 'UTF-8') : $heroSinopsis ?></p>
+                            <div class="catalogo-destacado__acciones">
+                                <a class="btn btn--primario" href="<?= htmlspecialchars($url('detalle', ['id' => $heroId]), ENT_QUOTES, 'UTF-8') ?>"><?= app_icon('play') ?> Ver detalles</a>
+                                <button class="btn btn--cristal js-guardar-contenido"
+                                        type="button"
+                                        data-id="<?= $heroId ?>"
+                                        data-titulo="<?= $heroTitulo ?>">
+                                    <?= app_icon('bookmark') ?> Guardar
+                                </button>
+                            </div>
+                        </div>
+                        <a class="catalogo-destacado__poster" href="<?= htmlspecialchars($url('detalle', ['id' => $heroId]), ENT_QUOTES, 'UTF-8') ?>" aria-label="Ver <?= $heroTitulo ?>">
+                            <?php if ($heroImagen !== ''): ?>
+                                <img src="<?= $heroImagen ?>" alt="Portada de <?= $heroTitulo ?>">
+                            <?php else: ?>
+                                <?= app_icon('film', 'icono--grande') ?>
+                            <?php endif; ?>
+                            <span><?= $heroGenero ?></span>
+                        </a>
+                    </section>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($recomendacionesVista)): ?>
+            <section class="catalogo-seccion">
+                <div class="catalogo-seccion__encabezado">
+                    <h2>Recomendado para ti</h2>
+                    <a href="<?= htmlspecialchars($url('catalogo', ['ver' => 'todos']) . '#todos', ENT_QUOTES, 'UTF-8') ?>">Ver más <?= app_icon('chevron-right') ?></a>
+                </div>
+                <div class="catalogo-grid-horizontal">
+                    <?php foreach (array_slice($recomendacionesVista, 0, 5) as $item) { $renderCard($item); } ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if (!empty($ultimasVistas)): ?>
+            <section class="catalogo-seccion">
+                <div class="catalogo-seccion__encabezado">
+                    <h2>Continúa explorando</h2>
+                </div>
+                <div class="catalogo-grid-horizontal catalogo-grid-horizontal--compacto">
+                    <?php foreach (array_slice($ultimasVistas, 0, 5) as $item) { $renderCard($item); } ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if (!empty($filaAfinidad)): ?>
+            <section class="catalogo-seccion">
+                <div class="catalogo-seccion__encabezado">
+                    <h2>Porque te gusta <?= htmlspecialchars(mb_strtolower($generoActivoNombre), ENT_QUOTES, 'UTF-8') ?></h2>
+                    <a href="<?= htmlspecialchars($url('perfil'), ENT_QUOTES, 'UTF-8') ?>">Editar gustos <?= app_icon('chevron-right') ?></a>
+                </div>
+                <div class="catalogo-grid-horizontal">
+                    <?php foreach ($filaAfinidad as $item) { $renderCard($item); } ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($mostrarTodo && !empty($contenidos)): ?>
+            <section class="catalogo-seccion" id="todos">
+                <div class="catalogo-seccion__encabezado">
+                    <h2>Todos los títulos</h2>
+                    <span class="texto-suave"><?= count($contenidos) ?> disponibles</span>
+                </div>
+                <div class="catalogo-grid-todos">
+                    <?php foreach ($contenidos as $item) { $renderCard($item); } ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if (empty($contenidos)): ?>
+            <section class="catalogo-vacio">
+                <?= app_icon('film', 'icono--grande') ?>
+                <h2>Sin resultados</h2>
+                <p>No encontramos contenido con esos filtros.</p>
+                <a class="btn btn--primario" href="<?= htmlspecialchars($url('catalogo'), ENT_QUOTES, 'UTF-8') ?>">Ver todo</a>
+            </section>
+        <?php endif; ?>
+    </section>
 </main>
 
 <?php include __DIR__ . '/../partials/footer.php'; ?>

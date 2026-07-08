@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<framefy>
+  <fuente>Framefy XML</fuente>
+  <descripcion>Generos destacados para intercambio y recomendaciones.</descripcion>
+  <actualizado_en>2026-07-06</actualizado_en>
+  <generos>
+    <genero>
+      <nombre>Ciencia ficcion</nombre>
+      <prioridad>alta</prioridad>
+    </genero>
+    <genero>
+      <nombre>Drama</nombre>
+      <prioridad>media</prioridad>
+    </genero>
+    <genero>
+      <nombre>Suspenso</nombre>
+      <prioridad>alta</prioridad>
+    </genero>
+  </generos>
+</framefy>

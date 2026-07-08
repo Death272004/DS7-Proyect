@@ -103,6 +103,16 @@ class UsuarioModelo extends Conexion
         return array_map('intval', array_column($stmt->fetchAll(), 'id_genero'));
     }
 
+    public function tienePreferencias(int $idUsuario): bool
+    {
+        $sql = 'SELECT COUNT(*) FROM usuarios_generos WHERE id_usuario = :id';
+        $stmt = self::conectar()->prepare($sql);
+        $stmt->bindValue(':id', $idUsuario, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
     public function guardarPreferencias(int $idUsuario, array $generos): void
     {
         $conexion = self::conectar();

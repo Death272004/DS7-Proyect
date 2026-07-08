@@ -1,0 +1,21 @@
+{
+  "fuente": "Framefy JSON",
+  "descripcion": "Contenido sugerido para intercambio con el catalogo.",
+  "actualizado_en": "2026-07-06",
+  "contenidos": [
+    {
+      "titulo": "Arrival",
+      "tipo": "pelicula",
+      "anio": 2016,
+      "genero": "Ciencia ficcion",
+      "calificacion": 8.0
+    },
+    {
+      "titulo": "Dark",
+      "tipo": "serie",
+      "anio": 2017,
+      "genero": "Misterio",
+      "calificacion": 8.7
+    }
+  ]
+}

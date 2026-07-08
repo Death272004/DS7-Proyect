@@ -56,13 +56,19 @@ final class Seguridad
 
         $_SESSION = [];
         $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000, [
-            'path' => $params['path'] ?? '/',
-            'domain' => $params['domain'] ?? '',
-            'secure' => (bool)($params['secure'] ?? false),
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
+
+        setcookie(
+            session_name(),
+            '',
+            [
+                'expires' => time() - 42000,
+                'path' => (string)($params['path'] ?? '/'),
+                'domain' => (string)($params['domain'] ?? ''),
+                'secure' => (bool)($params['secure'] ?? false),
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]
+        );
         session_destroy();
     }
 
@@ -71,6 +77,30 @@ final class Seguridad
         session_regenerate_id(true);
         $_SESSION['_csrf'] = bin2hex(random_bytes(32));
         $_SESSION['_ultimo_movimiento'] = time();
+    }
+
+    public static function guardarCookie(string $nombre, string $valor, int $segundos = 2592000): void
+    {
+        setcookie($nombre, $valor, [
+            'expires' => time() + $segundos,
+            'path' => '/',
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ]);
+        $_COOKIE[$nombre] = $valor;
+    }
+
+    public static function borrarCookie(string $nombre): void
+    {
+        setcookie($nombre, '', [
+            'expires' => time() - 42000,
+            'path' => '/',
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ]);
+        unset($_COOKIE[$nombre]);
     }
 
     public static function csrfToken(): string
@@ -89,6 +119,59 @@ final class Seguridad
         self::iniciarSesion();
         $token = $_POST['csrf_token'] ?? '';
         return is_string($token) && hash_equals((string)($_SESSION['_csrf'] ?? ''), $token);
+    }
+
+    public static function segundosBloqueoLogin(string $email): int
+    {
+        self::iniciarSesion();
+        $clave = self::claveIntentoLogin($email);
+        $registro = $_SESSION['_login_intentos'][$clave] ?? null;
+
+        if (!is_array($registro)) {
+            return 0;
+        }
+
+        $bloqueadoHasta = (int)($registro['bloqueado_hasta'] ?? 0);
+        if ($bloqueadoHasta === 0) {
+            return 0;
+        }
+
+        if ($bloqueadoHasta <= time()) {
+            unset($_SESSION['_login_intentos'][$clave]);
+            return 0;
+        }
+
+        return $bloqueadoHasta - time();
+    }
+
+    public static function registrarLoginFallido(string $email): int
+    {
+        self::iniciarSesion();
+        $clave = self::claveIntentoLogin($email);
+        $registro = $_SESSION['_login_intentos'][$clave] ?? [
+            'fallos' => 0,
+            'bloqueado_hasta' => 0,
+        ];
+
+        $registro['fallos'] = (int)($registro['fallos'] ?? 0) + 1;
+        if ($registro['fallos'] >= 3) {
+            $registro['bloqueado_hasta'] = time() + 60;
+        }
+
+        $_SESSION['_login_intentos'][$clave] = $registro;
+        return max(0, (int)$registro['bloqueado_hasta'] - time());
+    }
+
+    public static function limpiarIntentosLogin(string $email): void
+    {
+        self::iniciarSesion();
+        unset($_SESSION['_login_intentos'][self::claveIntentoLogin($email)]);
+    }
+
+    private static function claveIntentoLogin(string $email): string
+    {
+        $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'local');
+        return hash('sha256', mb_strtolower($email) . '|' . $ip);
     }
 
     public static function escapar(mixed $valor): string
@@ -147,16 +230,19 @@ final class Seguridad
         return self::usuarioId() !== null;
     }
 
-    public static function requiereLogin(string $rutaLogin = '../auth/auth.php'): void
+    public static function requiereLogin(?string $rutaLogin = null): void
     {
+        $rutaLogin ??= function_exists('app_url') ? app_url('auth') : '../auth/auth.php';
         if (!self::estaAutenticado()) {
             self::redirigir($rutaLogin);
         }
     }
 
-    public static function requiereAdmin(string $rutaInicio = '../inicio/inicio.php'): void
+    public static function requiereAdmin(?string $rutaInicio = null, ?string $rutaLogin = null): void
     {
-        self::requiereLogin('../auth/auth.php');
+        $rutaInicio ??= function_exists('app_url') ? app_url('inicio') : '../inicio/inicio.php';
+        $rutaLogin ??= function_exists('app_url') ? app_url('auth') : '../auth/auth.php';
+        self::requiereLogin($rutaLogin);
         if (self::rolUsuario() !== 'admin') {
             self::redirigir($rutaInicio);
         }

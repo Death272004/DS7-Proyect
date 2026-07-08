@@ -11,10 +11,11 @@ function mostrarErrorCampo(campo, mensaje) {
     limpiarErrorCampo(campo);
     campo.classList.add('campo--error');
     campo.classList.remove('campo--exito');
+    const contenedor = campo.closest('.grupo-campo') || campo.parentElement;
     const span = document.createElement('span');
     span.className   = 'error-campo';
     span.textContent = mensaje;
-    campo.parentElement.appendChild(span);
+    contenedor.appendChild(span);
 }
 
 function marcarCampoExito(campo) {
@@ -24,14 +25,26 @@ function marcarCampoExito(campo) {
 }
 
 function limpiarErrorCampo(campo) {
-    const previo = campo.parentElement.querySelector('.error-campo');
+    const contenedor = campo.closest('.grupo-campo') || campo.parentElement;
+    const previo = contenedor.querySelector('.error-campo');
     if (previo) previo.remove();
     campo.classList.remove('campo--error', 'campo--exito');
 }
 
+const ICONOS_FRAMEFY = {
+    alerta: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+    check: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    eye: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M6.7 6.7C3.8 8.7 2 12 2 12s3.5 7 10 7c1.6 0 3-.4 4.2-1"/><path d="M19.3 17.3C22 15.2 22 12 22 12s-3.5-7-10-7c-1.1 0-2.1.2-3 .5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+    info: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+    bookmark: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21 12 17 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>',
+    moon: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 7.4A9 9 0 1 1 12 3Z"/></svg>',
+    sun: '<svg class="icono" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/></svg>',
+};
+
 function mostrarAlertaFormulario(formulario, mensaje, tipo = 'error') {
     formulario.querySelectorAll('.alerta--dinamica').forEach(a => a.remove());
-    const iconos = { error: '⚠', exito: '✓', info: 'ℹ' };
+    const iconos = { error: ICONOS_FRAMEFY.alerta, exito: ICONOS_FRAMEFY.check, info: ICONOS_FRAMEFY.info };
     const div = document.createElement('div');
     div.className = `alerta alerta--${tipo} alerta--dinamica`;
     div.setAttribute('role', 'alert');
@@ -42,6 +55,28 @@ function mostrarAlertaFormulario(formulario, mensaje, tipo = 'error') {
 
 function estaVacio(valor) {
     return valor.trim() === '';
+}
+
+function obtenerCookie(nombre) {
+    const prefijo = `${nombre}=`;
+    return document.cookie
+        .split(';')
+        .map(cookie => cookie.trim())
+        .find(cookie => cookie.startsWith(prefijo))
+        ?.slice(prefijo.length) || '';
+}
+
+function guardarCookie(nombre, valor, segundos = 365 * 24 * 3600) {
+    document.cookie = `${nombre}=${encodeURIComponent(valor)};path=/;max-age=${segundos};SameSite=Lax`;
+}
+
+function leerGuardados() {
+    try {
+        const guardados = JSON.parse(decodeURIComponent(obtenerCookie('framefy_guardados') || '[]'));
+        return Array.isArray(guardados) ? guardados.map(id => String(id)) : [];
+    } catch (error) {
+        return [];
+    }
 }
 
 /* ============================================================
@@ -58,8 +93,6 @@ const REGEX = {
     anio:      /^\d{4}$/,
     // Duración 1-999 minutos
     duracion:  /^[1-9][0-9]{0,2}$/,
-    // URL básica (opcional)
-    url:       /^https?:\/\/.+\..+/,
 };
 
 const MENSAJES = {
@@ -68,7 +101,6 @@ const MENSAJES = {
     contrasena:'Mínimo 8 caracteres, con mayúscula, minúscula, número y carácter especial ($#€%-_).',
     anio:      'Ingresa un año válido de 4 dígitos.',
     duracion:  'La duración debe estar entre 1 y 999 minutos.',
-    url:       'Ingresa una URL válida (https://...).',
 };
 
 /* ============================================================
@@ -113,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const input   = wrapper.querySelector('input');
             const mostrar = input.type === 'password';
             input.type      = mostrar ? 'text' : 'password';
-            btn.textContent = mostrar ? '🙈' : '👁️';
+            btn.innerHTML = mostrar ? ICONOS_FRAMEFY.eyeOff : ICONOS_FRAMEFY.eye;
         });
     });
 
@@ -131,6 +163,19 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.classList.add('activo');
             tab.setAttribute('aria-selected', 'true');
             document.getElementById('tab-' + tab.dataset.tab)?.classList.add('activo');
+
+            const shell = tab.closest('.auth-shell');
+            if (shell) {
+                shell.classList.toggle('auth-shell--login', tab.dataset.tab === 'login');
+                shell.classList.toggle('auth-shell--registro', tab.dataset.tab === 'registro');
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-auth-switch]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabDestino = document.querySelector(`.auth-tab[data-tab="${btn.dataset.authSwitch}"]`);
+            tabDestino?.click();
         });
     });
 
@@ -141,8 +186,43 @@ document.addEventListener('DOMContentLoaded', () => {
     if (formLogin) {
         const campoEmail      = formLogin.querySelector('#login-email');
         const campoContrasena = formLogin.querySelector('#login-contrasena');
+        const botonSubmit     = formLogin.querySelector('.auth-submit');
+        const contadorBloqueo = formLogin.querySelector('.auth-bloqueo-countdown');
+        let segundosBloqueo   = parseInt(formLogin.dataset.bloqueoSegundos || '0', 10);
+
+        const controlesLogin = formLogin.querySelectorAll('input, button');
+
+        const actualizarBloqueoLogin = () => {
+            if (!contadorBloqueo || !botonSubmit) return;
+
+            if (segundosBloqueo <= 0) {
+                controlesLogin.forEach(control => control.disabled = false);
+                formLogin.classList.remove('auth-login-bloqueado');
+                formLogin.dataset.bloqueoSegundos = '0';
+                botonSubmit.textContent = 'Iniciar sesión';
+                contadorBloqueo.textContent = 'Ya puedes intentar iniciar sesión nuevamente.';
+                return;
+            }
+
+            const textoTiempo = segundosBloqueo >= 60
+                ? '1 minuto'
+                : `${segundosBloqueo} segundo${segundosBloqueo === 1 ? '' : 's'}`;
+            contadorBloqueo.innerHTML = `Panel bloqueado. Disponible en <strong>${textoTiempo}</strong>.`;
+            botonSubmit.textContent = 'Panel bloqueado';
+        };
+
+        if (segundosBloqueo > 0) {
+            controlesLogin.forEach(control => control.disabled = true);
+            actualizarBloqueoLogin();
+            const intervaloBloqueo = setInterval(() => {
+                segundosBloqueo -= 1;
+                actualizarBloqueoLogin();
+                if (segundosBloqueo <= 0) clearInterval(intervaloBloqueo);
+            }, 1000);
+        }
 
         campoEmail.addEventListener('blur', () => {
+            if (segundosBloqueo > 0) return;
             if (estaVacio(campoEmail.value)) {
                 mostrarErrorCampo(campoEmail, 'El correo es obligatorio.');
             } else if (!REGEX.email.test(campoEmail.value.trim())) {
@@ -153,6 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         campoContrasena.addEventListener('blur', () => {
+            if (segundosBloqueo > 0) return;
             if (estaVacio(campoContrasena.value)) {
                 mostrarErrorCampo(campoContrasena, 'La contraseña es obligatoria.');
             } else {
@@ -162,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         formLogin.addEventListener('submit', (e) => {
             e.preventDefault();
+            if (segundosBloqueo > 0) return;
             let valido = true;
 
             if (estaVacio(campoEmail.value)) {
@@ -191,7 +273,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const campoEmail      = formRegistro.querySelector('#registro-email');
         const campoPass       = formRegistro.querySelector('#registro-contrasena');
         const campoConfirmar  = formRegistro.querySelector('#registro-confirmar');
-        const campoTerminos   = formRegistro.querySelector('#registro-terminos');
         const barraContenedor = formRegistro.querySelector('.bloque-fuerza');
 
         // Fuerza en tiempo real
@@ -270,12 +351,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (campoConfirmar.value !== campoPass.value) {
                 mostrarErrorCampo(campoConfirmar, 'Las contraseñas no coinciden.'); valido = false;
             } else { marcarCampoExito(campoConfirmar); }
-
-            // Términos
-            if (campoTerminos && !campoTerminos.checked) {
-                mostrarAlertaFormulario(formRegistro, 'Debes aceptar los términos y condiciones.', 'error');
-                valido = false;
-            }
 
             if (valido) formRegistro.submit();
         });
@@ -372,6 +447,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ============================================================
+       CATÁLOGO: GUARDADOS Y DESTACADOS
+       ============================================================ */
+    const botonesGuardar = document.querySelectorAll('.js-guardar-contenido');
+    if (botonesGuardar.length) {
+        let idsGuardados = leerGuardados();
+
+        const pintarEstadoGuardado = (boton) => {
+            const id = String(boton.dataset.id || '');
+            const estaGuardado = idsGuardados.includes(id);
+            boton.classList.toggle('guardado', estaGuardado);
+            boton.setAttribute('aria-pressed', estaGuardado ? 'true' : 'false');
+
+            if (boton.classList.contains('btn')) {
+                boton.innerHTML = `${ICONOS_FRAMEFY.bookmark} ${estaGuardado ? 'Guardado' : 'Guardar'}`;
+            }
+        };
+
+        botonesGuardar.forEach(boton => {
+            pintarEstadoGuardado(boton);
+            boton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const id = String(boton.dataset.id || '');
+                if (!id) return;
+
+                idsGuardados = idsGuardados.includes(id)
+                    ? idsGuardados.filter(item => item !== id)
+                    : [...idsGuardados, id];
+
+                guardarCookie('framefy_guardados', JSON.stringify(idsGuardados));
+                document.querySelectorAll(`.js-guardar-contenido[data-id="${CSS.escape(id)}"]`).forEach(pintarEstadoGuardado);
+            });
+        });
+    }
+
+    document.querySelectorAll('.catalogo-destacados-rotador').forEach(rotador => {
+        const destacados = Array.from(rotador.querySelectorAll('.catalogo-destacado'));
+        if (destacados.length <= 1) return;
+
+        let indiceActivo = Math.max(0, destacados.findIndex(item => item.classList.contains('activo')));
+        const intervalo = Math.max(1500, parseInt(rotador.dataset.intervalo || '3000', 10));
+
+        setInterval(() => {
+            destacados[indiceActivo].classList.remove('activo');
+            indiceActivo = (indiceActivo + 1) % destacados.length;
+            destacados[indiceActivo].classList.add('activo');
+        }, intervalo);
+    });
+
+    /* ============================================================
        FORMULARIO CONTENIDO (admin)
        ============================================================ */
     const formContenido = document.getElementById('formulario-contenido');
@@ -383,6 +509,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const campoCalificacion = formContenido.querySelector('#contenido-calificacion');
         const campoTipo         = formContenido.querySelector('#contenido-tipo');
         const campoGenero       = formContenido.querySelector('#contenido-genero');
+        const campoId           = formContenido.querySelector('#contenido-id');
+        const campoImagen       = formContenido.querySelector('#contenido-imagen');
+        const campoTrailer      = formContenido.querySelector('#contenido-trailer');
+        const modalTitulo       = document.getElementById('modal-titulo');
+        const botonSubmit       = document.getElementById('contenido-submit');
+        const botonAgregar      = document.getElementById('btn-agregar-contenido');
+
+        const limpiarFormularioContenido = () => {
+            formContenido.reset();
+            formContenido.querySelectorAll('.error-campo').forEach(error => error.remove());
+            formContenido.querySelectorAll('.campo--error, .campo--exito').forEach(campo => {
+                campo.classList.remove('campo--error', 'campo--exito');
+            });
+            if (campoId) campoId.value = '';
+            if (modalTitulo) modalTitulo.textContent = 'Agregar título';
+            if (botonSubmit) botonSubmit.textContent = 'Guardar';
+        };
+
+        botonAgregar?.addEventListener('click', limpiarFormularioContenido);
+
+        document.querySelectorAll('.btn-editar-contenido').forEach(btn => {
+            btn.addEventListener('click', () => {
+                limpiarFormularioContenido();
+                if (campoId) campoId.value = btn.dataset.id || '';
+                if (campoTitulo) campoTitulo.value = btn.dataset.titulo || '';
+                if (campoTipo) campoTipo.value = btn.dataset.tipo || '';
+                if (campoAnio) campoAnio.value = btn.dataset.anio || '';
+                if (campoDuracion) campoDuracion.value = btn.dataset.duracion || '';
+                if (campoCalificacion) campoCalificacion.value = btn.dataset.calificacion || '';
+                if (campoGenero) campoGenero.value = btn.dataset.genero || '';
+                if (campoSinopsis) campoSinopsis.value = btn.dataset.sinopsis || '';
+                if (campoImagen) campoImagen.value = btn.dataset.imagen || '';
+                if (campoTrailer) campoTrailer.value = btn.dataset.trailer || '';
+                if (modalTitulo) modalTitulo.textContent = 'Editar título';
+                if (botonSubmit) botonSubmit.textContent = 'Actualizar';
+                abrirModal('modal-contenido');
+            });
+        });
 
         formContenido.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -455,35 +619,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (campoBusqueda) {
         campoBusqueda.addEventListener('input', () => {
             const termino = campoBusqueda.value.trim().toLowerCase();
-            document.querySelectorAll('.tarjeta-pelicula').forEach(card => {
-                const titulo = card.querySelector('.tarjeta-pelicula__titulo')?.textContent.toLowerCase() || '';
+            document.querySelectorAll('.tarjeta-pelicula, .catalogo-card').forEach(card => {
+                const titulo = (
+                    card.querySelector('.tarjeta-pelicula__titulo')?.textContent ||
+                    card.querySelector('.catalogo-card__info h3')?.textContent ||
+                    card.getAttribute('aria-label') ||
+                    ''
+                ).toLowerCase();
                 card.style.display = titulo.includes(termino) ? '' : 'none';
             });
         });
     }
-
-    /* ============================================================
-       CHIPS DE GÉNERO (catálogo)
-       ============================================================ */
-    document.querySelectorAll('.filtro-chip[data-genero]').forEach(chip => {
-        chip.addEventListener('click', (e) => {
-            if (chip.tagName === 'A') {
-                return;
-            }
-            e.preventDefault();
-            document.querySelectorAll('.filtro-chip').forEach(c => c.classList.remove('activo'));
-            chip.classList.add('activo');
-            const genero = chip.dataset.genero;
-            document.querySelectorAll('.tarjeta-pelicula').forEach(card => {
-                if (!genero || genero === 'todos') {
-                    card.style.display = '';
-                } else {
-                    const generos = card.dataset.generos || '';
-                    card.style.display = generos.toLowerCase().includes(genero.toLowerCase()) ? '' : 'none';
-                }
-            });
-        });
-    });
 
     /* ============================================================
        TOGGLE TEMA CLARO / OSCURO (cookie)
@@ -494,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const esClaro   = document.body.classList.toggle('tema-claro');
             const nuevoTema = esClaro ? 'claro' : 'oscuro';
             document.cookie = `tema=${nuevoTema};path=/;max-age=${365*24*3600};SameSite=Lax`;
-            btnTema.textContent = esClaro ? '🌙' : '☀️';
+            btnTema.innerHTML = esClaro ? ICONOS_FRAMEFY.moon : ICONOS_FRAMEFY.sun;
         });
     }
 
